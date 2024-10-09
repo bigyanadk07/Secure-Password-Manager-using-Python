@@ -24,13 +24,13 @@
 
 SecurePass Manager  
 
-** Clone the repository:  **
-git clone https://github.com/bigyanadk07/Secure-Password-Manager-using-Python.git
+Clone the repository:  
+git clone https://github.com/bigyanadk07/Secure-Password-Manager-using-Python.git  
 
-** Navigate to the project directory:  **
-cd SecurePassManage   
+Navigate to the project directory:  
+cd SecurePassManage    
 
-** Install the required libraries:  **
+Install the required libraries:  
 pip install customtkinter  
 
 
