@@ -24,10 +24,8 @@
 
 SecurePass Manager  
 
-**🛠 Installation**
-
-## Clone the repository:  
-git clone https://github.com/yourusername/SecurePassManager.git
+** Clone the repository:  **
+git clone https://github.com/bigyanadk07/Secure-Password-Manager-using-Python.git
 
 ** Navigate to the project directory:  **
 cd SecurePassManage   
