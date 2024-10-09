@@ -22,20 +22,21 @@
 
 ## Installation 📦
 
-SecurePass Manager
+SecurePass Manager  
+
 **🛠 Installation**
 
 ## Clone the repository:  
 git clone https://github.com/yourusername/SecurePassManager.git
 
-## Navigate to the project directory:  
+** Navigate to the project directory:  **
 cd SecurePassManage   
 
-## Install the required libraries:  
+** Install the required libraries:  **
 pip install customtkinter  
 
 
-## Run the application:  
+** Run the application:  **
 python passymang.py   
 
 ## 📖 Usage  
@@ -48,7 +49,7 @@ View existing credentials securely.
 Edit or delete credentials as needed.  
 
 
-🤝 Contributing  
+## 🤝 Contributing  
 Contributions are welcome! Please follow these steps:  
 
 Fork the repository.    
