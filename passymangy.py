@@ -122,6 +122,13 @@ class PasswordManager:
         )
         signup_button.pack(side="left", padx=5)
 
+        tagline_label = ctk.CTkLabel(
+            self.window, 
+            text="Made by Bigyan Adk", 
+            font=("Roboto", 10, "italic")
+            )
+        tagline_label.pack(side="bottom", anchor="se", padx=10, pady=10)
+
     def show_signup_page(self):
         self.clear_window()
         
