@@ -6,6 +6,8 @@ from tkinter import messagebox
 import re
 from typing import Dict, List, Optional
 from datetime import datetime
+from cryptography.fernet import Fernet
+import base64
 
 class PasswordManager:
     def __init__(self):
@@ -24,7 +26,34 @@ class PasswordManager:
         
         # Create and show login frame
         self.show_login_page()
-        
+    
+    def generate_key(self, password: str) -> bytes:
+        # Generate a key from the user's password
+        salt = b'anthropic_claude_salt'  # You might want to store this securely
+        kdf_key = hashlib.pbkdf2_hmac(
+            'sha256', 
+            password.encode(), 
+            salt, 
+            100000  # Number of iterations
+        )
+        return base64.urlsafe_b64encode(kdf_key)
+    
+    def get_cipher(self, password: str) -> Fernet:
+        key = self.generate_key(password)
+        return Fernet(key)
+    
+    def encrypt_password(self, password: str, user_password: str) -> str:
+        cipher = self.get_cipher(user_password)
+        return cipher.encrypt(password.encode()).decode()
+    
+    def decrypt_password(self, encrypted_password: str, user_password: str) -> str:
+        try:
+            cipher = self.get_cipher(user_password)
+            return cipher.decrypt(encrypted_password.encode()).decode()
+        except Exception:
+            messagebox.showerror("Error", "Failed to decrypt password. Your login password might have changed.")
+            return None
+
     def initialize_data_file(self):
         if not os.path.exists(self.data_file):
             initial_data = {
@@ -92,9 +121,6 @@ class PasswordManager:
             command=self.show_signup_page
         )
         signup_button.pack(side="left", padx=5)
-
-        footer_label = ctk.CTkLabel(self.window, text="Your Secure Password Vault", font=("Roboto", 14), fg_color="#333")
-        footer_label.pack(pady=10)
 
     def show_signup_page(self):
         self.clear_window()
@@ -175,7 +201,6 @@ class PasswordManager:
     def show_main_page(self):
         self.clear_window()
         
-        # Create navigation frame
         nav_frame = ctk.CTkFrame(self.window, width=200)
         nav_frame.pack(side="left", fill="y", padx=10, pady=10)
         
@@ -184,12 +209,12 @@ class PasswordManager:
         
         ctk.CTkLabel(user_frame, text=f"👤 {self.current_user}", font=("Roboto", 16, "bold")).pack(side="left", pady=5)
         
-        # Add colorful icons for buttons
         buttons = [
             ("➕ Add Credentials", self.show_add_credentials),
             ("👁️ View Credentials", self.show_view_credentials),
             ("✏️ Edit Credentials", self.show_edit_credentials),
             ("🔑 Change Password", self.show_change_password),
+            ("🎲 Password Generator", self.show_password_generator),
         ]
         
         for text, command in buttons:
@@ -201,101 +226,64 @@ class PasswordManager:
         
         ctk.CTkButton(nav_frame, text="🚪 Logout", command=self.logout, fg_color="red").pack(pady=20, padx=5, fill="x")
         
-        # Create main content frame
         self.content_frame = ctk.CTkFrame(self.window)
         self.content_frame.pack(side="right", fill="both", expand=True, padx=10, pady=10)
         
-        # Show welcome dashboard
         self.show_dashboard()
 
-    def show_dashboard(self):
+    def show_add_credentials(self):
         self.clear_content_frame()
         
-        data = self.load_data()
-        user_data = data["users"][self.current_user]
+        ctk.CTkLabel(self.content_frame, text="Add New Credentials", font=("Roboto", 20, "bold")).pack(pady=10)
         
-        ctk.CTkLabel(self.content_frame, text="Dashboard", font=("Roboto", 24, "bold")).pack(pady=10)
+        form_frame = ctk.CTkFrame(self.content_frame)
+        form_frame.pack(pady=20, padx=20)
         
-        stats_frame = ctk.CTkFrame(self.content_frame)
-        stats_frame.pack(fill="x", padx=20, pady=10)
+        service_entry = ctk.CTkEntry(form_frame, placeholder_text="Service Name", width=300)
+        service_entry.pack(pady=10)
         
-        # Statistics
-        num_credentials = len(user_data["credentials"])
-        last_login = user_data["last_login"]
-        last_login_str = "Never" if last_login is None else datetime.fromisoformat(last_login).strftime("%Y-%m-%d %H:%M")
+        email_entry = ctk.CTkEntry(form_frame, placeholder_text="Email", width=300)
+        email_entry.pack(pady=10)
         
-        stats = [
-            ("🔑 Total Credentials", str(num_credentials)),
-            ("🕒 Last Login", last_login_str),
-            ("🛡️ Account Type", "Admin" if user_data["is_admin"] else "User"),
-        ]
+        password_entry = ctk.CTkEntry(form_frame, placeholder_text="Password", show="*", width=300)
+        password_entry.pack(pady=10)
         
-        for title, value in stats:
-            stat_frame = ctk.CTkFrame(stats_frame)
-            stat_frame.pack(side="left", expand=True, padx=5, pady=5)
-            
-            ctk.CTkLabel(stat_frame, text=title, font=("Roboto", 14)).pack()
-            ctk.CTkLabel(stat_frame, text=value, font=("Roboto", 16, "bold")).pack()
-
-    def show_change_password(self):
-        self.clear_content_frame()
-        
-        ctk.CTkLabel(self.content_frame, text="Change Password", font=("Roboto", 20, "bold")).pack(pady=10)
-        
-        current_password = ctk.CTkEntry(self.content_frame, placeholder_text="Current Password", show="*", width=300)
-        current_password.pack(pady=10)
-        
-        new_password = ctk.CTkEntry(self.content_frame, placeholder_text="New Password", show="*", width=300)
-        new_password.pack(pady=10)
-        
-        confirm_password = ctk.CTkEntry(self.content_frame, placeholder_text="Confirm New Password", show="*", width=300)
-        confirm_password.pack(pady=10)
-        
-        button_frame = ctk.CTkFrame(self.content_frame)
+        button_frame = ctk.CTkFrame(form_frame)
         button_frame.pack(pady=10)
         
-        change_button = ctk.CTkButton(
+        add_button = ctk.CTkButton(
             button_frame,
-            text="Change Password",
-            command=lambda: self.change_password(
-                current_password.get(),
-                new_password.get(),
-                confirm_password.get(),
+            text="Add Credentials",
+            command=lambda: self.add_credentials(
+                service_entry.get(),
+                email_entry.get(),
+                password_entry.get(),
                 button_frame
             )
         )
-        change_button.pack()
+        add_button.pack()
 
-    def change_password(self, current_password: str, new_password: str, confirm_password: str, button_frame):
+    def add_credentials(self, service: str, email: str, password: str, button_frame):
+        if not service or not email or not password:
+            self.show_status_indicator(button_frame, False)
+            messagebox.showerror("Error", "All fields are required")
+            return
+        
         data = self.load_data()
-        user_data = data["users"][self.current_user]
+        user_password = data["users"][self.current_user]["password"]
         
-        if self.hash_password(current_password) != user_data["password"]:
-            self.show_status_indicator(button_frame, False)
-            messagebox.showerror("Error", "Current password is incorrect")
-            return
+        # Encrypt the service password using the user's login password hash
+        encrypted_password = self.encrypt_password(password, user_password)
         
-        if new_password != confirm_password:
-            self.show_status_indicator(button_frame, False)
-            messagebox.showerror("Error", "New passwords do not match")
-            return
-        
-        data["users"][self.current_user]["password"] = self.hash_password(new_password)
+        new_credential = {
+            "service": service,
+            "email": email,
+            "password": encrypted_password  # Store encrypted password
+        }
+        data["users"][self.current_user]["credentials"].append(new_credential)
         self.save_data(data)
         self.show_status_indicator(button_frame, True)
-
-    def show_credential_password(self, credential: Dict):
-        dialog = ctk.CTkInputDialog(text="Enter your password to view:", title="Password Required")
-        password = dialog.get_input()
-        
-        if password is None:
-            return
-        
-        data = self.load_data()
-        if self.hash_password(password) == data["users"][self.current_user]["password"]:
-            messagebox.showinfo("Password", f"Password for {credential['service']}: {credential['password']}")
-        else:
-            messagebox.showerror("Error", "Incorrect password")
+        self.window.after(2000, self.show_view_credentials)
 
     def show_view_credentials(self):
         self.clear_content_frame()
@@ -342,66 +330,27 @@ class PasswordManager:
             
             ctk.CTkLabel(info_frame, text=f"Service: {cred['service']}", anchor="w").pack(fill="x")
             ctk.CTkLabel(info_frame, text=f"Email: {cred['email']}", anchor="w").pack(fill="x")
-            password_frame = ctk.CTkFrame(info_frame)
-            password_frame.pack(fill="x")
-            ctk.CTkLabel(password_frame, text="Password: ", anchor="w").pack(side="left")
-            ctk.CTkLabel(password_frame, text="*" * 8).pack(side="left")
             
             ctk.CTkButton(
                 cred_frame,
-                text="👁️",
-                width=30,
+                text="👁️ Show Password",
                 command=lambda c=cred: self.show_credential_password(c)
             ).pack(side="right", padx=5)
 
-    def show_add_credentials(self):
-        self.clear_content_frame()
+    def show_credential_password(self, credential: Dict):
+        dialog = ctk.CTkInputDialog(text="Enter your password to view:", title="Password Required")
+        password = dialog.get_input()
         
-        ctk.CTkLabel(self.content_frame, text="Add New Credentials", font=("Roboto", 20, "bold")).pack(pady=10)
-        
-        form_frame = ctk.CTkFrame(self.content_frame)
-        form_frame.pack(pady=20, padx=20)
-        
-        service_entry = ctk.CTkEntry(form_frame, placeholder_text="Service Name", width=300)
-        service_entry.pack(pady=10)
-        
-        email_entry = ctk.CTkEntry(form_frame, placeholder_text="Email", width=300)
-        email_entry.pack(pady=10)
-        
-        password_entry = ctk.CTkEntry(form_frame, placeholder_text="Password", show="*", width=300)
-        password_entry.pack(pady=10)
-        
-        button_frame = ctk.CTkFrame(form_frame)
-        button_frame.pack(pady=10)
-        
-        add_button = ctk.CTkButton(
-            button_frame,
-            text="Add Credentials",
-            command=lambda: self.add_credentials(
-                service_entry.get(),
-                email_entry.get(),
-                password_entry.get(),
-                button_frame
-            )
-        )
-        add_button.pack()
-
-    def add_credentials(self, service: str, email: str, password: str, button_frame):
-        if not service or not email or not password:
-            self.show_status_indicator(button_frame, False)
-            messagebox.showerror("Error", "All fields are required")
+        if password is None:
             return
         
         data = self.load_data()
-        new_credential = {
-            "service": service,
-            "email": email,
-            "password": password
-        }
-        data["users"][self.current_user]["credentials"].append(new_credential)
-        self.save_data(data)
-        self.show_status_indicator(button_frame, True)
-        self.window.after(2000, self.show_view_credentials)
+        if self.hash_password(password) == data["users"][self.current_user]["password"]:
+            decrypted_password = self.decrypt_password(credential['password'], data["users"][self.current_user]["password"])
+            if decrypted_password:
+                messagebox.showinfo("Password", f"Password for {credential['service']}: {decrypted_password}")
+        else:
+            messagebox.showerror("Error", "Incorrect password")
 
     def show_edit_credentials(self):
         self.clear_content_frame()
@@ -470,6 +419,10 @@ class PasswordManager:
         edit_window.title(f"Edit {credential['service']}")
         edit_window.geometry("400x300")
         
+        data = self.load_data()
+        user_password = data["users"][self.current_user]["password"]
+        decrypted_password = self.decrypt_password(credential['password'], user_password)
+        
         ctk.CTkLabel(edit_window, text=f"Editing {credential['service']}", font=("Roboto", 16, "bold")).pack(pady=10)
         
         service_entry = ctk.CTkEntry(edit_window, placeholder_text="Service Name", width=300)
@@ -480,8 +433,9 @@ class PasswordManager:
         email_entry.insert(0, credential['email'])
         email_entry.pack(pady=10)
         
-        password_entry = ctk.CTkEntry(edit_window, placeholder_text="Password", show="*", width=300)
-        password_entry.insert(0, credential['password'])
+        password_entry = ctk.CTkEntry(edit_window, placeholder_text="Password", width=300)
+        if decrypted_password:
+            password_entry.insert(0, decrypted_password)
         password_entry.pack(pady=10)
         
         button_frame = ctk.CTkFrame(edit_window)
@@ -516,13 +470,17 @@ class PasswordManager:
         
         data = self.load_data()
         credentials = data["users"][self.current_user]["credentials"]
+        user_password = data["users"][self.current_user]["password"]
+        
+        # Encrypt the new password
+        encrypted_password = self.encrypt_password(password, user_password)
         
         for i, cred in enumerate(credentials):
             if cred == old_cred:
                 credentials[i] = {
                     "service": service,
                     "email": email,
-                    "password": password
+                    "password": encrypted_password
                 }
                 break
         
@@ -540,6 +498,94 @@ class PasswordManager:
             self.save_data(data)
             self.show_edit_credentials()
 
+    def show_change_password(self):
+        self.clear_content_frame()
+        
+        ctk.CTkLabel(self.content_frame, text="Change Password", font=("Roboto", 20, "bold")).pack(pady=10)
+        
+        current_password = ctk.CTkEntry(self.content_frame, placeholder_text="Current Password", show="*", width=300)
+        current_password.pack(pady=10)
+        
+        new_password = ctk.CTkEntry(self.content_frame, placeholder_text="New Password", show="*", width=300)
+        new_password.pack(pady=10)
+        
+        confirm_password = ctk.CTkEntry(self.content_frame, placeholder_text="Confirm New Password", show="*", width=300)
+        confirm_password.pack(pady=10)
+        
+        button_frame = ctk.CTkFrame(self.content_frame)
+        button_frame.pack(pady=10)
+        
+        change_button = ctk.CTkButton(
+            button_frame,
+            text="Change Password",
+            command=lambda: self.change_password(
+                current_password.get(),
+                new_password.get(),
+                confirm_password.get(),
+                button_frame
+            )
+        )
+        change_button.pack()
+
+    def change_password(self, current_password: str, new_password: str, confirm_password: str, button_frame):
+        if new_password != confirm_password:
+            self.show_status_indicator(button_frame, False)
+            messagebox.showerror("Error", "New passwords do not match")
+            return
+        
+        data = self.load_data()
+        user_data = data["users"][self.current_user]
+        
+        if self.hash_password(current_password) != user_data["password"]:
+            self.show_status_indicator(button_frame, False)
+            messagebox.showerror("Error", "Current password is incorrect")
+            return
+        
+        # Need to re-encrypt all stored passwords with the new password
+        for cred in user_data["credentials"]:
+            decrypted_password = self.decrypt_password(cred["password"], user_data["password"])
+            if decrypted_password:
+                cred["password"] = self.encrypt_password(decrypted_password, self.hash_password(new_password))
+        
+        data["users"][self.current_user]["password"] = self.hash_password(new_password)
+        self.save_data(data)
+        self.show_status_indicator(button_frame, True)
+
+    def show_password_generator(self):
+        self.clear_content_frame()
+        
+        ctk.CTkLabel(self.content_frame, text="Password Generator", font=("Roboto", 20, "bold")).pack(pady=10)
+        
+        length_frame = ctk.CTkFrame(self.content_frame)
+        length_frame.pack(pady=10)
+        
+        ctk.CTkLabel(length_frame, text="Password Length:").pack(side="left", padx=5)
+        length_entry = ctk.CTkEntry(length_frame, width=50)
+        length_entry.insert(0, "12")
+        length_entry.pack(side="left", padx=5)
+        
+        password_var = ctk.StringVar()
+        password_label = ctk.CTkEntry(self.content_frame, textvariable=password_var, width=300, state="readonly")
+        password_label.pack(pady=10)
+        
+        def generate():
+            try:
+                length = int(length_entry.get())
+                password = self.generate_password(length)
+                password_var.set(password)
+            except ValueError:
+                messagebox.showerror("Error", "Please enter a valid number for password length")
+        
+        generate_button = ctk.CTkButton(self.content_frame, text="Generate Password", command=generate)
+        generate_button.pack(pady=10)
+        
+        copy_button = ctk.CTkButton(
+            self.content_frame,
+            text="Copy to Clipboard",
+            command=lambda: self.window.clipboard_clear() or self.window.clipboard_append(password_var.get())
+        )
+        copy_button.pack(pady=10)
+
     def show_admin_panel(self):
         if not self.is_admin():
             messagebox.showerror("Error", "Access denied")
@@ -552,11 +598,9 @@ class PasswordManager:
         tabs = ctk.CTkTabview(self.content_frame)
         tabs.pack(fill="both", expand=True)
         
-        # User Management Tab
         user_tab = tabs.add("User Management")
         self.show_user_management(user_tab)
         
-        # Credentials Management Tab
         cred_tab = tabs.add("All Credentials")
         self.show_all_credentials(cred_tab)
 
@@ -615,20 +659,14 @@ class PasswordManager:
                         command=lambda u=username, c=cred: self.admin_edit_credential(u, c)
                     ).pack(side="left", padx=2)
 
-    def admin_reset_password(self, username: str):
-        dialog = ctk.CTkInputDialog(text=f"Enter new password for {username}:", title="Reset Password")
-        new_password = dialog.get_input()
-        
-        if new_password:
-            data = self.load_data()
-            data["users"][username]["password"] = self.hash_password(new_password)
-            self.save_data(data)
-            messagebox.showinfo("Success", f"Password reset for {username}")
-
     def admin_edit_credential(self, username: str, credential: Dict):
         dialog = ctk.CTkToplevel(self.window)
         dialog.title(f"Edit Credential - {username}")
         dialog.geometry("400x300")
+        
+        data = self.load_data()
+        user_password = data["users"][username]["password"]
+        decrypted_password = self.decrypt_password(credential['password'], user_password)
         
         ctk.CTkLabel(dialog, text=f"Editing {credential['service']} for {username}").pack(pady=10)
         
@@ -641,7 +679,8 @@ class PasswordManager:
         email_entry.pack(pady=10)
         
         password_entry = ctk.CTkEntry(dialog, placeholder_text="Password")
-        password_entry.insert(0, credential['password'])
+        if decrypted_password:
+            password_entry.insert(0, decrypted_password)
         password_entry.pack(pady=10)
         
         button_frame = ctk.CTkFrame(dialog)
@@ -655,29 +694,61 @@ class PasswordManager:
                 service_entry.get(),
                 email_entry.get(),
                 password_entry.get(),
-                dialog, button_frame
+                dialog,
+                button_frame
             )
         ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            button_frame,
+            text="Cancel",
+            command=dialog.destroy
+        ).pack(side="left", padx=5)
 
-    def save_admin_credential_changes(self, username: str, old_cred: Dict, 
-                                    service: str, email: str, password: str, 
-                                    dialog, button_frame):
+    def save_admin_credential_changes(self, username: str, old_cred: Dict, service: str, email: str, password: str, window, button_frame):
+        if not service or not email or not password:
+            self.show_status_indicator(button_frame, False)
+            messagebox.showerror("Error", "All fields are required")
+            return
+        
         data = self.load_data()
         user_credentials = data["users"][username]["credentials"]
+        user_password = data["users"][username]["password"]
+        
+        encrypted_password = self.encrypt_password(password, user_password)
         
         for i, cred in enumerate(user_credentials):
             if cred == old_cred:
                 user_credentials[i] = {
                     "service": service,
                     "email": email,
-                    "password": password
+                    "password": encrypted_password
                 }
                 break
         
         self.save_data(data)
         self.show_status_indicator(button_frame, True)
-        self.window.after(2000, dialog.destroy)
+        self.window.after(2000, window.destroy)
         self.show_admin_panel()
+
+    def admin_reset_password(self, username: str):
+        if messagebox.askyesno("Confirm Reset", f"Are you sure you want to reset the password for {username}?"):
+            new_password = self.generate_password(12)
+            data = self.load_data()
+            
+            # Re-encrypt all credentials with the new password
+            old_password_hash = data["users"][username]["password"]
+            new_password_hash = self.hash_password(new_password)
+            
+            for cred in data["users"][username]["credentials"]:
+                decrypted_password = self.decrypt_password(cred["password"], old_password_hash)
+                if decrypted_password:
+                    cred["password"] = self.encrypt_password(decrypted_password, new_password_hash)
+            
+            data["users"][username]["password"] = new_password_hash
+            self.save_data(data)
+            
+            messagebox.showinfo("Password Reset", f"New password for {username}: {new_password}")
 
     def delete_user(self, username: str):
         if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete user {username}?"):
@@ -686,23 +757,39 @@ class PasswordManager:
             self.save_data(data)
             self.show_admin_panel()
 
-    def is_admin(self) -> bool:
+    def generate_password(self, length: int) -> str:
+        characters = string.ascii_letters + string.digits + string.punctuation
+        return ''.join(random.choice(characters) for _ in range(length))
+
+    def show_dashboard(self):
+        self.clear_content_frame()
+        
+        ctk.CTkLabel(self.content_frame, text="Dashboard", font=("Roboto", 24, "bold")).pack(pady=20)
+        
         data = self.load_data()
-        return data["users"][self.current_user]["is_admin"]
+        user_data = data["users"][self.current_user]
+        
+        stats_frame = ctk.CTkFrame(self.content_frame)
+        stats_frame.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(stats_frame, text=f"Total Credentials: {len(user_data['credentials'])}", font=("Roboto", 16)).pack(pady=5)
+        
+        if user_data["last_login"]:
+            last_login = datetime.fromisoformat(user_data["last_login"])
+            ctk.CTkLabel(stats_frame, text=f"Last Login: {last_login.strftime('%Y-%m-%d %H:%M:%S')}", font=("Roboto", 16)).pack(pady=5)
+
+    def clear_content_frame(self):
+        if hasattr(self, 'content_frame'):
+            for widget in self.content_frame.winfo_children():
+                widget.destroy()
 
     def clear_window(self):
         for widget in self.window.winfo_children():
             widget.destroy()
 
-    def clear_content_frame(self):
-        if hasattr(self, 'content_frame'):
-            for widget in self.content_frame.winfo_children():
-                widget.destroy()
-
-    def clear_content_frame(self):
-        if hasattr(self, 'content_frame'):
-            for widget in self.content_frame.winfo_children():
-                widget.destroy()
+    def is_admin(self) -> bool:
+        data = self.load_data()
+        return data["users"][self.current_user]["is_admin"]
 
     def logout(self):
         self.current_user = None
@@ -710,43 +797,6 @@ class PasswordManager:
 
     def run(self):
         self.window.mainloop()
-
-    def generate_password(self, length=12):
-        import string
-        import random
-        characters = string.ascii_letters + string.digits + string.punctuation
-        return ''.join(random.choice(characters) for _ in range(length))
-
-    def show_password_generator(self):
-        self.clear_content_frame()
-        
-        ctk.CTkLabel(self.content_frame, text="Password Generator", font=("Roboto", 20, "bold")).pack(pady=10)
-        
-        length_frame = ctk.CTkFrame(self.content_frame)
-        length_frame.pack(pady=10)
-        
-        ctk.CTkLabel(length_frame, text="Password Length:").pack(side="left", padx=5)
-        length_entry = ctk.CTkEntry(length_frame, width=50)
-        length_entry.insert(0, "12")
-        length_entry.pack(side="left", padx=5)
-        
-        password_var = ctk.StringVar()
-        password_label = ctk.CTkEntry(self.content_frame, textvariable=password_var, width=300, state="readonly")
-        password_label.pack(pady=10)
-        
-        def generate():
-            try:
-                length = int(length_entry.get())
-                password = self.generate_password(length)
-                password_var.set(password)
-            except ValueError:
-                messagebox.showerror("Error", "Please enter a valid number for password length")
-        
-        generate_button = ctk.CTkButton(self.content_frame, text="Generate Password", command=generate)
-        generate_button.pack(pady=10)
-        
-        copy_button = ctk.CTkButton(self.content_frame, text="Copy to Clipboard", command=lambda: self.window.clipboard_clear() or self.window.clipboard_append(password_var.get()))
-        copy_button.pack(pady=10)
 
 if __name__ == "__main__":
     app = PasswordManager()
