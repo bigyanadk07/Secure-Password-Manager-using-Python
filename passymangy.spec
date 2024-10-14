@@ -5,7 +5,7 @@ a = Analysis(
     ['passymangy.py'],
     pathex=[],
     binaries=[],
-    datas=[('password_data.json', '.')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

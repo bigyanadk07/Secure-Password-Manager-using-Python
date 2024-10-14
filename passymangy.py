@@ -1,3 +1,4 @@
+import string
 import customtkinter as ctk
 import json
 import hashlib
@@ -7,6 +8,7 @@ import re
 from typing import Dict, List, Optional
 from datetime import datetime
 from cryptography.fernet import Fernet
+import random 
 import base64
 
 class PasswordManager:
